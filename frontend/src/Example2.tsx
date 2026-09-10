@@ -2,28 +2,13 @@ import React, { useMemo, useState } from "react";
 import dayjs from "dayjs";
 import { v4 as uuidv4 } from "uuid";
 import {
-  Home,
-  Calendar,
-  CheckSquare,
-  Target,
-  BookOpen,
-  Sun,
-  Moon,
-  Coffee,
-  Laptop,
-  Utensils,
-  Dumbbell,
-  Car,
-  Gamepad2,
-  Users,
   ChevronLeft,
   ChevronRight,
-  BarChart3,
-  Clock,
-  Star,
+  ChevronDown,
   CalendarDays,
-  MoreVertical,
-  CircleDot,
+  Clock,
+  Sun,
+  User,
 } from "lucide-react";
 
 /* -------------------------------------------------------------------------
@@ -32,9 +17,7 @@ import {
  * ActivityCategory: "sleep" | "work" | "commute" | "meal" | "exercise"
  *   | "study" | "hobby" | "personal" | "free" | "other"
  * Availability: "busy" | "flexible" | "free"
- * TimeOfDay: { hour, minute }   -- hour/minute can express any clock time,
- *   not just whole hours. An endTime <= startTime means the block wraps
- *   past midnight into the next day.
+ * TimeOfDay: { hour, minute } -- to-the-minute precision.
  * ScheduleBlock: { id, title, description?, category, availability,
  *   startTime, endTime }
  * DailySchedule: { date: Dayjs, blocks: ScheduleBlock[] }
@@ -44,111 +27,65 @@ import {
  *   largestCategory?, totalBusyMinutes, totalFlexibleMinutes, totalFreeMinutes }
  * ---------------------------------------------------------------------- */
 
+// Fine-grained category metadata. Categories that are grouped together for
+// display (e.g. work + commute) intentionally share the same color so the
+// schedule, overview bar, and legend all read consistently.
 const CATEGORY_META = {
-  sleep: { label: "Sleep", color: "#7C9BC4", icon: Moon },
-  personal: { label: "Personal", color: "#C6A6D9", icon: Sun },
-  meal: { label: "Meals / Routine", color: "#EAC062", icon: Utensils },
-  work: { label: "Work Related", color: "#74AE8A", icon: Laptop },
-  commute: { label: "Commute", color: "#A7B2BE", icon: Car },
-  exercise: { label: "Exercise", color: "#E2909A", icon: Dumbbell },
-  study: { label: "Study", color: "#9C86D4", icon: BookOpen },
-  hobby: { label: "Hobbies / Free", color: "#B79FDD", icon: Gamepad2 },
-  free: { label: "Free Time", color: "#9FC3DE", icon: Users },
-  other: { label: "Other", color: "#BDB3A0", icon: CircleDot },
+  sleep: { color: "#A9C7E8", group: "sleep" },
+  personal: { color: "#F0D9A8", group: "personalMeals" },
+  meal: { color: "#F0D9A8", group: "personalMeals" },
+  work: { color: "#A9D8B0", group: "workCommute" },
+  commute: { color: "#A9D8B0", group: "workCommute" },
+  exercise: { color: "#C9B8E8", group: "exercise" },
+  study: { color: "#A8DDD5", group: "study" },
+  hobby: { color: "#F2B8BE", group: "hobbyFree" },
+  free: { color: "#F2B8BE", group: "hobbyFree" },
+  other: { color: "#C9C9C9", group: "other" },
 };
 
-const ROW_ICONS = {
-  wake: Sun,
-  breakfast: Coffee,
-  work: Laptop,
-  lunch: Utensils,
-  commute: Car,
-  exercise: Dumbbell,
-  dinner: Utensils,
-  study: BookOpen,
-  hobby: Gamepad2,
-  free: Users,
-  sleep: Moon,
+const GROUP_META = {
+  sleep: { label: "Sleep", color: "#A9C7E8" },
+  workCommute: { label: "Work (incl. commute)", color: "#A9D8B0" },
+  personalMeals: { label: "Personal / Meals", color: "#F0D9A8" },
+  exercise: { label: "Exercise", color: "#C9B8E8" },
+  study: { label: "Study", color: "#A8DDD5" },
+  hobbyFree: { label: "Hobby / Free Time", color: "#F2B8BE" },
+  other: { label: "Other (wind down, etc.)", color: "#C9C9C9" },
 };
+const GROUP_ORDER = [
+  "sleep",
+  "workCommute",
+  "personalMeals",
+  "exercise",
+  "study",
+  "hobbyFree",
+  "other",
+];
 
-/* --------------------------- sample data builder ---------------------------
- * Times are set to the minute, not snapped to the hour — blocks can start
- * and end anywhere, overlap gaps, or run short/long relative to a clock hour.
- * The final "Sleep" block wraps past midnight (22:30 -> 6:00 next day).
- * ---------------------------------------------------------------------- */
+/* --------------------------- sample data builder --------------------------- */
 
-function block(title, category, availability, startTime, endTime, rowIcon) {
-  return {
-    id: uuidv4(),
-    title,
-    category,
-    availability,
-    startTime,
-    endTime,
-    rowIcon,
-  };
+function block(title, category, availability, startTime, endTime) {
+  return { id: uuidv4(), title, category, availability, startTime, endTime };
 }
-
 function t(hour, minute = 0) {
   return { hour, minute };
 }
 
 function buildSampleBlocks() {
   return [
-    block(
-      "Wake up, shower, get ready",
-      "personal",
-      "flexible",
-      t(6, 0),
-      t(6, 40),
-      "wake"
-    ),
-    block("Breakfast", "meal", "busy", t(6, 40), t(7, 20), "breakfast"),
-    block("Commute to work", "commute", "busy", t(7, 20), t(8, 10), "commute"),
-    block(
-      "Work \u2013 deep focus",
-      "work",
-      "busy",
-      t(8, 15),
-      t(11, 40),
-      "work"
-    ),
-    block(
-      "Lunch + short walk",
-      "meal",
-      "flexible",
-      t(11, 40),
-      t(12, 30),
-      "lunch"
-    ),
-    block(
-      "Work \u2013 meetings / projects",
-      "work",
-      "busy",
-      t(12, 30),
-      t(16, 50),
-      "work"
-    ),
-    block("Gym", "exercise", "busy", t(17, 0), t(18, 10), "exercise"),
-    block(
-      "Dinner + cleanup",
-      "meal",
-      "flexible",
-      t(18, 10),
-      t(19, 0),
-      "dinner"
-    ),
-    block("Study", "study", "flexible", t(19, 5), t(20, 0), "study"),
-    block(
-      "Hobby \u2013 reading, gaming, or writing",
-      "hobby",
-      "free",
-      t(20, 0),
-      t(21, 45),
-      "hobby"
-    ),
-    block("Wind down", "personal", "flexible", t(21, 45), t(22, 30), "sleep"),
-    block("Sleep", "sleep", "busy", t(22, 30), t(6, 0), "sleep"),
+    block("Sleep", "sleep", "busy", t(0), t(6)),
+    block("Wake up, shower, get ready", "personal", "flexible", t(6), t(7)),
+    block("Breakfast + commute", "meal", "busy", t(7), t(8)),
+    block("Work \u2013 focused tasks", "work", "busy", t(8), t(10)),
+    block("Lunch + short walk", "meal", "flexible", t(10), t(10, 30)),
+    block("Work \u2013 meetings / projects", "work", "busy", t(11, 30), t(16)),
+    block("Commute home", "commute", "busy", t(16), t(17)),
+    block("Exercise / gym", "exercise", "busy", t(17), t(18)),
+    block("Dinner + cleanup", "meal", "flexible", t(18), t(19)),
+    block("Study / skill-building", "study", "flexible", t(19), t(20)),
+    block("Hobby / free time", "hobby", "free", t(20), t(22)),
+    block("Wind down", "other", "free", t(22), t(23)),
+    block("Sleep", "sleep", "busy", t(23), t(24)),
   ];
 }
 
@@ -164,12 +101,18 @@ const fmtTime = (tod) =>
     .hour(tod.hour % 24)
     .minute(tod.minute)
     .format("h:mm A");
-// Duration handles blocks that wrap past midnight (endTime <= startTime).
 const durationOf = (b) => {
   const start = toMinutes(b.startTime);
   let end = toMinutes(b.endTime);
   if (end <= start) end += 1440;
   return end - start;
+};
+const hoursLabel = (mins) => {
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 };
 
 /* ------------------------------- analysis --------------------------------- */
@@ -177,8 +120,8 @@ const durationOf = (b) => {
 function analyzeSchedule(blocks) {
   const totalsByCategory = {};
   for (const b of blocks) {
-    const mins = durationOf(b);
-    totalsByCategory[b.category] = (totalsByCategory[b.category] || 0) + mins;
+    totalsByCategory[b.category] =
+      (totalsByCategory[b.category] || 0) + durationOf(b);
   }
   const categoryBreakdown = Object.entries(totalsByCategory)
     .map(([category, totalMinutes]) => ({
@@ -188,7 +131,7 @@ function analyzeSchedule(blocks) {
     }))
     .sort((a, b) => b.totalMinutes - a.totalMinutes);
 
-  const largestCategory = categoryBreakdown.find((c) => c.category !== "other");
+  const largestCategory = categoryBreakdown[0];
 
   let totalBusyMinutes = 0;
   let totalFlexibleMinutes = 0;
@@ -200,7 +143,6 @@ function analyzeSchedule(blocks) {
     else totalFreeMinutes += mins;
   }
 
-  // Free windows: merge contiguous minutes marked as "free" availability
   const timeline = new Array(1440).fill(true); // true = not free
   for (const b of blocks) {
     const start = toMinutes(b.startTime);
@@ -224,7 +166,7 @@ function analyzeSchedule(blocks) {
   }
   const longestFreeWindow = freeWindows.reduce(
     (best, w) => (!best || w.durationMinutes > best.durationMinutes ? w : best),
-    undefined
+    undefined,
   );
 
   return {
@@ -238,55 +180,34 @@ function analyzeSchedule(blocks) {
   };
 }
 
-const hoursLabel = (mins) => {
-  const h = Math.floor(mins / 60);
-  const m = Math.round(mins % 60);
-  if (h === 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
-};
+// Roll the fine-grained categoryBreakdown up into the 7 display groups used
+// by the legend / allocation panel / "most time" insight.
+function groupBreakdown(categoryBreakdown) {
+  const totals = {};
+  for (const c of categoryBreakdown) {
+    const g = CATEGORY_META[c.category].group;
+    totals[g] = (totals[g] || 0) + c.totalMinutes;
+  }
+  return GROUP_ORDER.filter((g) => totals[g] > 0)
+    .map((g) => ({
+      group: g,
+      totalMinutes: totals[g],
+      percentageOfDay: (totals[g] / 1440) * 100,
+    }))
+    .sort((a, b) => b.totalMinutes - a.totalMinutes);
+}
 
 /* --------------------------------- UI bits --------------------------------- */
 
-function SidebarItem({ icon: Icon, label, active }) {
-  return (
-    <div
-      className='flex items-center gap-3 px-4 py-2.5 rounded-lg cursor-pointer transition-colors'
-      style={{
-        backgroundColor: active ? "rgba(124,155,196,0.28)" : "transparent",
-        color: "#2E3A50",
-      }}>
-      <Icon size={18} strokeWidth={2} />
-      <span style={{ fontFamily: "'Caveat', cursive", fontSize: "20px" }}>
-        {label}
-      </span>
-    </div>
-  );
-}
-
-function WavyUnderline({ width = 220, color = "#4F6FA8" }) {
-  return (
-    <svg width={width} height='12' viewBox={`0 0 ${width} 12`} fill='none'>
-      <path
-        d={`M2 7 Q ${width * 0.15} 1, ${width * 0.3} 7 T ${width * 0.6} 7 T ${
-          width * 0.9
-        } 7`}
-        stroke={color}
-        strokeWidth='2.5'
-        strokeLinecap='round'
-        fill='none'
-      />
-    </svg>
-  );
-}
+const FONT = "'Space Mono', monospace";
 
 function Panel({ children, style, className = "" }) {
   return (
     <section
-      className={`rounded-xl border p-4 ${className}`}
+      className={`rounded-xl border p-5 ${className}`}
       style={{
-        backgroundColor: "#F6F2E6",
-        borderColor: "rgba(46,58,80,0.12)",
+        backgroundColor: "#FBF6EB",
+        borderColor: "rgba(90,66,46,0.18)",
         ...style,
       }}>
       {children}
@@ -294,32 +215,36 @@ function Panel({ children, style, className = "" }) {
   );
 }
 
-/* ------------------------------ timeline schedule --------------------------
- * Hour marks (6 AM, 7 AM, ...) are reference gridlines only. Every block is
- * positioned and sized in proportion to its real start time and duration,
- * in minutes, so it can start or end at any minute and any length.
- * ---------------------------------------------------------------------- */
+function BinderDots({ count = 15 }) {
+  return (
+    <div className='hidden md:flex flex-col items-center justify-between h-full py-2'>
+      {Array.from({ length: count }).map((_, i) => (
+        <span
+          key={i}
+          className='w-2.5 h-2.5 rounded-full'
+          style={{ backgroundColor: "rgba(90,66,46,0.35)" }}
+        />
+      ))}
+    </div>
+  );
+}
 
-const RULER_START_MIN = 6 * 60; // 6:00 AM
-const RULER_END_MIN = 24 * 60; // 12:00 AM (midnight)
-const RULER_SPAN = RULER_END_MIN - RULER_START_MIN;
-
-function ScheduleTimeline({ blocks }) {
+function ScheduleColumn({ label, windowStart, windowEnd, blocks }) {
+  const span = windowEnd - windowStart;
   const hourMarks = [];
-  for (let h = 6; h <= 24; h++) hourMarks.push(h);
+  for (let m = windowStart; m < windowEnd; m += 60) hourMarks.push(m);
 
-  // Compute each block's visible slice within the ruler window.
   const positioned = blocks
     .map((b) => {
       const realStart = toMinutes(b.startTime);
       const realEnd = realStart + durationOf(b);
-      const clipStart = Math.max(realStart, RULER_START_MIN);
-      const clipEnd = Math.min(realEnd, RULER_END_MIN);
+      const clipStart = Math.max(realStart, windowStart);
+      const clipEnd = Math.min(realEnd, windowEnd);
       if (clipEnd <= clipStart) return null;
       return {
         block: b,
-        topPct: ((clipStart - RULER_START_MIN) / RULER_SPAN) * 100,
-        heightPct: ((clipEnd - clipStart) / RULER_SPAN) * 100,
+        topPct: ((clipStart - windowStart) / span) * 100,
+        heightPct: ((clipEnd - clipStart) / span) * 100,
         labelStart: fromMinutes(clipStart),
         labelEnd: fromMinutes(clipEnd),
       };
@@ -327,114 +252,92 @@ function ScheduleTimeline({ blocks }) {
     .filter(Boolean);
 
   return (
-    <div className='flex-1 relative' style={{ minHeight: 0 }}>
-      {/* hour gridlines + labels */}
-      {hourMarks.map((h) => {
-        const pct = ((h * 60 - RULER_START_MIN) / RULER_SPAN) * 100;
-        return (
-          <div
-            key={h}
-            className='absolute left-0 right-0 flex items-start'
-            style={{ top: `${pct}%` }}>
-            <span
-              className='w-[54px] shrink-0 -translate-y-1/2 text-[11px] text-right pr-2'
-              style={{
-                color: "#8A93A3",
-                fontFamily: "'Nunito Sans', sans-serif",
-              }}>
-              {dayjs()
-                .hour(h % 24)
-                .minute(0)
-                .format("h A")}
-            </span>
+    <div className='flex flex-col h-full'>
+      <h2
+        className='text-[19px] font-bold pb-1.5 mb-3 border-b-2'
+        style={{ color: "#3B2C20", borderColor: "#3B2C20", fontFamily: FONT }}>
+        {label}
+      </h2>
+      <div className='flex-1 relative' style={{ minHeight: 0 }}>
+        {hourMarks.map((m) => {
+          const pct = ((m - windowStart) / span) * 100;
+          return (
             <div
-              className='flex-1 border-t'
-              style={{ borderColor: "rgba(46,58,80,0.1)" }}
-            />
-          </div>
-        );
-      })}
-
-      {/* blocks, absolutely positioned by real start time + duration */}
-      <div
-        className='absolute inset-0'
-        style={{ left: "54px", paddingLeft: "12px" }}>
-        {positioned.map(
-          ({ block: b, topPct, heightPct, labelStart, labelEnd }) => {
-            const meta = CATEGORY_META[b.category];
-            const Icon = b.rowIcon ? ROW_ICONS[b.rowIcon] : null;
-            const compact = heightPct < 3.2;
-            return (
+              key={m}
+              className='absolute left-0 right-0 flex items-start'
+              style={{ top: `${pct}%` }}>
+              <span
+                className='w-[52px] shrink-0 -translate-y-1/2 text-[11px] text-right pr-2'
+                style={{ color: "#8C7A63", fontFamily: FONT }}>
+                {dayjs()
+                  .hour(Math.floor(m / 60) % 24)
+                  .minute(0)
+                  .format("h A")}
+              </span>
               <div
-                key={b.id}
-                className='absolute left-3 right-0 rounded-lg border overflow-hidden'
-                style={{
-                  top: `${topPct}%`,
-                  height: `${heightPct}%`,
-                  backgroundColor:
-                    meta.color + (b.category === "other" ? "30" : "70"),
-                  borderColor: meta.color,
-                  minHeight: "20px",
-                }}>
+                className='flex-1 border-t'
+                style={{ borderColor: "rgba(90,66,46,0.15)" }}
+              />
+            </div>
+          );
+        })}
+        <div
+          className='absolute inset-0'
+          style={{ left: "52px", paddingLeft: "10px" }}>
+          {positioned.map(
+            ({ block: b, topPct, heightPct, labelStart, labelEnd }) => {
+              const meta = CATEGORY_META[b.category];
+              const compact = heightPct < 3.2;
+              return (
                 <div
-                  className={`flex items-center h-full gap-2 px-2.5 ${
-                    compact ? "py-0" : "py-1.5"
-                  }`}>
-                  <div className='flex-1 min-w-0'>
-                    {!compact && (
-                      <div
-                        className='text-[10.5px] tabular-nums truncate'
-                        style={{
-                          color: "#4A5568",
-                          fontFamily: "'Nunito Sans', sans-serif",
-                        }}>
-                        {fmtTime(labelStart)} {"\u2013"} {fmtTime(labelEnd)}
-                      </div>
-                    )}
-                    <div
-                      className='text-[12.5px] truncate'
-                      style={{
-                        color: "#2E3A50",
-                        fontFamily: "'Nunito Sans', sans-serif",
-                        fontWeight: 600,
-                      }}>
-                      {b.title}
-                    </div>
+                  key={b.id}
+                  className='absolute left-2 right-0 rounded-md overflow-hidden px-3'
+                  style={{
+                    top: `${topPct}%`,
+                    height: `${heightPct}%`,
+                    backgroundColor: meta.color + "AA",
+                    minHeight: "18px",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                  }}>
+                  <div
+                    className='italic truncate'
+                    style={{
+                      color: "#3B2C20",
+                      fontFamily: FONT,
+                      fontSize: compact ? "12px" : "13.5px",
+                      fontWeight: 700,
+                    }}>
+                    {b.title}
                   </div>
-                  {Icon && !compact && (
-                    <div className='shrink-0 opacity-70'>
-                      <Icon size={15} strokeWidth={2} color='#2E3A50' />
-                    </div>
-                  )}
-                  {!compact && b.category !== "other" && (
-                    <div className='shrink-0 opacity-40'>
-                      <MoreVertical size={14} color='#2E3A50' />
+                  {!compact && (
+                    <div
+                      className='truncate'
+                      style={{
+                        color: "#6B5A46",
+                        fontFamily: FONT,
+                        fontSize: "11px",
+                      }}>
+                      {fmtTime(labelStart)} {"\u2013"} {fmtTime(labelEnd)}
                     </div>
                   )}
                 </div>
-              </div>
-            );
-          }
-        )}
+              );
+            },
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-/* ---------------------------- overview + allocation ------------------------- */
-
 function OverviewBar({ blocks }) {
-  const groups = [];
-  for (const b of blocks) {
-    const last = groups[groups.length - 1];
-    if (last && last.category === b.category) last.minutes += durationOf(b);
-    else groups.push({ category: b.category, minutes: durationOf(b) });
-  }
   return (
     <div>
       <div
         className='flex w-full h-8 rounded-md overflow-hidden border'
-        style={{ borderColor: "rgba(46,58,80,0.15)" }}>
+        style={{ borderColor: "rgba(90,66,46,0.2)" }}>
         {blocks.map((b) => (
           <div
             key={b.id}
@@ -442,12 +345,14 @@ function OverviewBar({ blocks }) {
               flexGrow: durationOf(b),
               flexBasis: 0,
               backgroundColor: CATEGORY_META[b.category].color,
-              borderRight: "1px solid rgba(255,255,255,0.35)",
+              borderRight: "1px solid rgba(255,255,255,0.4)",
             }}
           />
         ))}
       </div>
-      <div className='flex mt-1.5 text-[10.5px]' style={{ color: "#6B7280" }}>
+      <div
+        className='flex mt-1.5 text-[10.5px]'
+        style={{ color: "#8C7A63", fontFamily: FONT }}>
         {["12 AM", "6 AM", "12 PM", "6 PM", "12 AM"].map((lbl, i) => (
           <div
             key={i}
@@ -456,23 +361,18 @@ function OverviewBar({ blocks }) {
           </div>
         ))}
       </div>
-      <div className='flex mt-2.5'>
-        {groups.map((g, i) => (
-          <div
-            key={i}
-            style={{ flexGrow: g.minutes, flexBasis: 0 }}
-            className='text-center px-0.5'>
-            <div
-              style={{
-                fontFamily: "'Caveat', cursive",
-                fontSize: "15px",
-                color: "#2E3A50",
-              }}>
-              {CATEGORY_META[g.category].label.split(" ")[0]}
-            </div>
-            <div className='text-[10.5px]' style={{ color: "#6B7280" }}>
-              {hoursLabel(g.minutes)}
-            </div>
+      <div className='flex flex-wrap gap-x-5 gap-y-2 mt-4'>
+        {GROUP_ORDER.map((g) => (
+          <div key={g} className='flex items-center gap-1.5'>
+            <span
+              className='w-2.5 h-2.5 rounded-full shrink-0'
+              style={{ backgroundColor: GROUP_META[g].color }}
+            />
+            <span
+              className='text-[12px]'
+              style={{ color: "#3B2C20", fontFamily: FONT }}>
+              {GROUP_META[g].label}
+            </span>
           </div>
         ))}
       </div>
@@ -481,25 +381,17 @@ function OverviewBar({ blocks }) {
 }
 
 function AllocationRow({ summary }) {
-  const meta = CATEGORY_META[summary.category];
+  const meta = GROUP_META[summary.group];
   return (
-    <div className='flex items-center gap-2.5'>
+    <div className='flex items-center gap-3'>
       <span
-        className='w-2.5 h-2.5 rounded-full shrink-0'
-        style={{ backgroundColor: meta.color }}
-      />
-      <span
-        className='w-[118px] shrink-0 text-[12.5px] truncate'
-        style={{
-          color: "#2E3A50",
-          fontFamily: "'Nunito Sans', sans-serif",
-          fontWeight: 600,
-        }}>
+        className='w-[168px] shrink-0 text-[13px] truncate'
+        style={{ color: "#3B2C20", fontFamily: FONT }}>
         {meta.label}
       </span>
       <div
-        className='flex-1 h-2.5 rounded-full overflow-hidden'
-        style={{ backgroundColor: "#DED6C3" }}>
+        className='flex-1 h-3 rounded-full overflow-hidden'
+        style={{ backgroundColor: "#E7DCC6" }}>
         <div
           className='h-full rounded-full'
           style={{
@@ -509,41 +401,44 @@ function AllocationRow({ summary }) {
         />
       </div>
       <span
-        className='w-11 text-right text-[12px] tabular-nums'
-        style={{ color: "#4A5568" }}>
+        className='w-8 text-right text-[12.5px] tabular-nums'
+        style={{ color: "#6B5A46", fontFamily: FONT }}>
         {hoursLabel(summary.totalMinutes)}
       </span>
       <span
-        className='w-9 text-right text-[12px] tabular-nums'
-        style={{ color: "#4A5568" }}>
+        className='w-10 text-right text-[12.5px] tabular-nums'
+        style={{ color: "#6B5A46", fontFamily: FONT }}>
         {Math.round(summary.percentageOfDay)}%
       </span>
     </div>
   );
 }
 
-function InsightRow({ icon: Icon, heading, detail }) {
+function InsightCard({ icon: Icon, label, value, caption }) {
   return (
-    <div className='flex items-start gap-2.5'>
-      <div className='mt-0.5 shrink-0' style={{ color: "#2E3A50" }}>
-        <Icon size={17} strokeWidth={2} />
+    <div
+      className='flex-1 rounded-lg border p-3.5'
+      style={{
+        borderColor: "rgba(90,66,46,0.18)",
+        backgroundColor: "#F3ECDC",
+      }}>
+      <div className='flex items-center gap-1.5 mb-2'>
+        <Icon size={14} color='#6B5A46' />
+        <span
+          className='text-[11px]'
+          style={{ color: "#6B5A46", fontFamily: FONT }}>
+          {label}
+        </span>
       </div>
-      <div>
-        <div
-          className='text-[11.5px]'
-          style={{ color: "#6B7280", fontFamily: "'Nunito Sans', sans-serif" }}>
-          {heading}
-        </div>
-        <div
-          className='inline-block px-1.5 rounded text-[12.5px] mt-0.5'
-          style={{
-            backgroundColor: "#F3D98A88",
-            color: "#2E3A50",
-            fontFamily: "'Nunito Sans', sans-serif",
-            fontWeight: 700,
-          }}>
-          {detail}
-        </div>
+      <div
+        className='text-[16px] font-bold mb-0.5 truncate'
+        style={{ color: "#3B2C20", fontFamily: FONT }}>
+        {value}
+      </div>
+      <div
+        className='text-[11px]'
+        style={{ color: "#6B5A46", fontFamily: FONT }}>
+        {caption}
       </div>
     </div>
   );
@@ -552,348 +447,234 @@ function InsightRow({ icon: Icon, heading, detail }) {
 /* --------------------------------- main app --------------------------------- */
 
 export default function DailySchedulePlanner() {
-  const [date, setDate] = useState(dayjs("2025-04-22"));
+  const [date, setDate] = useState(dayjs("2024-04-23"));
+  const [viewMode, setViewMode] = useState("day");
   const blocks = useMemo(() => buildSampleBlocks(), []);
-  const schedule = { date, blocks };
   const analysis = useMemo(() => analyzeSchedule(blocks), [blocks]);
+  const groups = useMemo(
+    () => groupBreakdown(analysis.categoryBreakdown),
+    [analysis],
+  );
 
-  const work = analysis.categoryBreakdown.find((c) => c.category === "work");
-  const sleepBlocks = blocks.filter((b) => b.category === "sleep");
-
-  const workBlocks = blocks.filter((b) => b.category === "work");
-  const workFirstStart = workBlocks.length
-    ? workBlocks.reduce((a, b) =>
-        toMinutes(a.startTime) < toMinutes(b.startTime) ? a : b
-      )
-    : null;
-  const workLastEnd = workBlocks.length
-    ? workBlocks.reduce((a, b) =>
-        toMinutes(a.endTime) > toMinutes(b.endTime) ? a : b
-      )
-    : null;
-  const freeFromWorkMinutes =
-    workFirstStart && workLastEnd
-      ? 1440 -
-        (toMinutes(workLastEnd.endTime) - toMinutes(workFirstStart.startTime))
-      : 0;
-
-  const totalMinutesForCategory = (cat) =>
-    blocks
-      .filter((b) => b.category === cat)
-      .reduce((sum, b) => sum + durationOf(b), 0);
+  const mostTime = groups[0];
+  const freeMinutes = analysis.totalFlexibleMinutes + analysis.totalFreeMinutes;
 
   return (
     <div
-      className='w-full min-h-screen flex'
-      style={{
-        backgroundColor: "#E8E1CE",
-        fontFamily: "'Nunito Sans', sans-serif",
-      }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Nunito+Sans:wght@400;600;700;800&display=swap');
-      `}</style>
+      className='w-full min-h-screen flex items-center justify-center p-4 md:p-8'
+      style={{ backgroundColor: "#CBB99C" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');`}</style>
 
-      {/* Sidebar: fixed ~230px */}
-      <aside
-        className='shrink-0 hidden md:flex flex-col justify-between py-8 px-5'
+      <div
+        className='w-full rounded-3xl p-6 md:p-8'
         style={{
-          width: "230px",
-          backgroundColor: "#EFE9D8",
-          borderRight: "1px solid rgba(46,58,80,0.1)",
+          maxWidth: "1650px",
+          backgroundColor: "#F1E8D6",
+          border: "10px solid #6B4A34",
+          boxShadow: "0 20px 50px rgba(0,0,0,0.25)",
+          fontFamily: FONT,
         }}>
-        <div>
-          <div
-            className='mb-8 px-1'
-            style={{
-              fontFamily: "'Caveat', cursive",
-              fontSize: "26px",
-              color: "#2E3A50",
-              fontWeight: 700,
-            }}>
-            My Planner
-          </div>
-          <nav className='flex flex-col gap-1'>
-            <SidebarItem icon={Home} label='Home' />
-            <SidebarItem icon={Calendar} label='Schedule' active />
-            <SidebarItem icon={CheckSquare} label='Tasks' />
-            <SidebarItem icon={Target} label='Goals' />
-            <SidebarItem icon={BookOpen} label='Notes' />
-          </nav>
-        </div>
-        <div className='px-1'>
-          <div className='mb-3'>
-            <svg width='26' height='52' viewBox='0 0 30 60' fill='none'>
-              <path d='M15 58 V10' stroke='#8B9AAE' strokeWidth='1.5' />
-              <path
-                d='M15 20 Q22 14 26 6'
-                stroke='#8B9AAE'
-                strokeWidth='1.5'
-                fill='none'
-              />
-              <path
-                d='M15 32 Q6 26 3 18'
-                stroke='#8B9AAE'
-                strokeWidth='1.5'
-                fill='none'
-              />
-            </svg>
-          </div>
-          <p
-            style={{
-              fontFamily: "'Caveat', cursive",
-              fontSize: "18px",
-              color: "#2E3A50",
-              lineHeight: 1.25,
-            }}>
-            "A more intentional day a brighter tomorrow."
-          </p>
-        </div>
-      </aside>
-
-      {/* Content: schedule column (~800fr) + right column (~890fr) */}
-      <main className='flex-1 min-w-0 p-6 md:p-8'>
+        {/* Header */}
         <div
-          className='grid'
-          style={{
-            gridTemplateColumns: "800fr 890fr",
-            columnGap: "24px",
-            rowGap: "16px",
-          }}>
-          {/* Row 1, Col 1: Title */}
-          <div>
-            <h1
-              style={{
-                fontFamily: "'Caveat', cursive",
-                fontSize: "40px",
-                color: "#2E3A50",
-                fontWeight: 700,
-              }}>
-              Daily Schedule
-            </h1>
-            <div className='-mt-2 mb-1'>
-              <WavyUnderline />
-            </div>
-            <p className='text-[13.5px] italic' style={{ color: "#4A5568" }}>
-              "A productive day is a collection of intentional choices."
-            </p>
-          </div>
-
-          {/* Row 1, Col 2: Date / Controls */}
-          <div className='flex items-center justify-between gap-3'>
+          className='flex flex-wrap items-center justify-between gap-4 pb-5 mb-5 border-b-2'
+          style={{ borderColor: "rgba(90,66,46,0.25)" }}>
+          <div className='flex items-center gap-3'>
             <div
-              className='flex items-center gap-2 px-3 py-2 rounded-lg border'
-              style={{
-                backgroundColor: "#F6F2E6",
-                borderColor: "rgba(46,58,80,0.15)",
-              }}>
-              <button
-                onClick={() => setDate((d) => d.subtract(1, "day"))}
-                aria-label='Previous day'
-                className='p-0.5 rounded hover:bg-black/5'>
-                <ChevronLeft size={16} color='#2E3A50' />
-              </button>
-              <span
-                className='text-[13.5px] px-1 tabular-nums'
-                style={{ color: "#2E3A50", fontWeight: 700 }}>
-                {date.format("ddd, MMM D, YYYY")}
-              </span>
-              <button
-                onClick={() => setDate((d) => d.add(1, "day"))}
-                aria-label='Next day'
-                className='p-0.5 rounded hover:bg-black/5'>
-                <ChevronRight size={16} color='#2E3A50' />
-              </button>
+              className='w-14 h-14 rounded-full border-2 flex items-center justify-center shrink-0'
+              style={{ borderColor: "#3B2C20" }}>
+              <svg width='24' height='24' viewBox='0 0 24 24' fill='none'>
+                <path d='M12 21 V6' stroke='#3B2C20' strokeWidth='1.5' />
+                <path
+                  d='M12 12 Q18 8 20 3'
+                  stroke='#3B2C20'
+                  strokeWidth='1.5'
+                  fill='none'
+                />
+                <path
+                  d='M12 16 Q6 12 4 7'
+                  stroke='#3B2C20'
+                  strokeWidth='1.5'
+                  fill='none'
+                />
+              </svg>
             </div>
-            <div
-              className='p-2.5 rounded-lg border'
-              style={{
-                backgroundColor: "#F6F2E6",
-                borderColor: "rgba(46,58,80,0.15)",
-              }}>
-              <CalendarDays size={16} color='#2E3A50' />
-            </div>
-            <div
-              className='hidden lg:flex flex-col items-center justify-center rotate-[3deg] px-2.5 py-1.5 rounded-sm shadow-sm shrink-0'
-              style={{ backgroundColor: "#F3D98A" }}>
-              <span
-                style={{
-                  fontFamily: "'Caveat', cursive",
-                  fontSize: "14px",
-                  color: "#4A3B1D",
-                  lineHeight: 1.1,
-                }}>
-                Same plan.
-              </span>
-              <span
-                style={{
-                  fontFamily: "'Caveat', cursive",
-                  fontSize: "14px",
-                  color: "#4A3B1D",
-                  lineHeight: 1.1,
-                }}>
-                A better you.
-              </span>
+            <div>
+              <h1
+                className='text-[30px] font-bold leading-tight'
+                style={{ color: "#3B2C20", fontFamily: FONT }}>
+                Daily Schedule
+              </h1>
+              <p
+                className='text-[13px]'
+                style={{ color: "#6B5A46", fontFamily: FONT }}>
+                Plan your time. Live with intention.
+              </p>
             </div>
           </div>
 
-          {/* Rows 2-4, Col 1: Schedule timeline (minute-precision, spans full right-column height) */}
-          <Panel
-            style={{
-              gridRow: "span 3",
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
-            }}>
-            <h2
-              className='mb-2 shrink-0'
-              style={{
-                fontFamily: "'Caveat', cursive",
-                fontSize: "24px",
-                color: "#2E3A50",
-              }}>
-              Today's Schedule
-            </h2>
-            <ScheduleTimeline blocks={schedule.blocks} />
-          </Panel>
-
-          {/* Row 2, Col 2: 24-Hour Overview */}
-          <Panel>
-            <h2
-              className='mb-3'
-              style={{
-                fontFamily: "'Caveat', cursive",
-                fontSize: "22px",
-                color: "#2E3A50",
-              }}>
-              24-Hour Overview
-            </h2>
-            <OverviewBar blocks={blocks} />
-          </Panel>
-
-          {/* Row 3, Col 2: Time Allocation */}
-          <Panel>
-            <h2
-              className='mb-3'
-              style={{
-                fontFamily: "'Caveat', cursive",
-                fontSize: "22px",
-                color: "#2E3A50",
-              }}>
-              Time Allocation
-            </h2>
-            <div className='flex flex-col gap-2.5'>
-              {analysis.categoryBreakdown.map((s) => (
-                <AllocationRow key={s.category} summary={s} />
-              ))}
-            </div>
-          </Panel>
-
-          {/* Row 4, Col 2: Insights | Notes side by side */}
           <div
-            className='grid'
-            style={{ gridTemplateColumns: "3fr 2fr", columnGap: "16px" }}>
+            className='flex items-center gap-2 px-3 py-2 rounded-lg border'
+            style={{
+              backgroundColor: "#FBF6EB",
+              borderColor: "rgba(90,66,46,0.2)",
+            }}>
+            <button
+              onClick={() => setDate((d) => d.subtract(1, "day"))}
+              aria-label='Previous day'
+              className='p-0.5 rounded hover:bg-black/5'>
+              <ChevronLeft size={16} color='#3B2C20' />
+            </button>
+            <span
+              className='text-[14px] px-1 tabular-nums font-bold'
+              style={{ color: "#3B2C20", fontFamily: FONT }}>
+              {date.format("dddd, MMM D, YYYY")}
+            </span>
+            <button
+              onClick={() => setDate((d) => d.add(1, "day"))}
+              aria-label='Next day'
+              className='p-0.5 rounded hover:bg-black/5'>
+              <ChevronRight size={16} color='#3B2C20' />
+            </button>
+            <div
+              className='w-px h-5 mx-1'
+              style={{ backgroundColor: "rgba(90,66,46,0.25)" }}
+            />
+            <CalendarDays size={16} color='#3B2C20' />
+          </div>
+
+          <div className='flex items-center gap-4'>
+            <div
+              className='flex rounded-lg border overflow-hidden'
+              style={{ borderColor: "rgba(90,66,46,0.2)" }}>
+              {["Day", "Week", "Month"].map((v) => {
+                const active = viewMode === v.toLowerCase();
+                return (
+                  <button
+                    key={v}
+                    onClick={() => setViewMode(v.toLowerCase())}
+                    className='px-4 py-2 text-[13px] font-bold'
+                    style={{
+                      backgroundColor: active ? "#A9C7E8" : "#FBF6EB",
+                      color: "#3B2C20",
+                      fontFamily: FONT,
+                    }}>
+                    {v}
+                  </button>
+                );
+              })}
+            </div>
+            <div
+              className='w-px h-8'
+              style={{ backgroundColor: "rgba(90,66,46,0.25)" }}
+            />
+            <div className='flex items-center gap-2 cursor-pointer'>
+              <div
+                className='w-9 h-9 rounded-full border-2 flex items-center justify-center'
+                style={{ borderColor: "#3B2C20" }}>
+                <User size={16} color='#3B2C20' />
+              </div>
+              <span
+                className='text-[13.5px] font-bold'
+                style={{ color: "#3B2C20", fontFamily: FONT }}>
+                Hlao Khang
+              </span>
+              <ChevronDown size={14} color='#3B2C20' />
+            </div>
+          </div>
+        </div>
+
+        {viewMode !== "day" && (
+          <div
+            className='mb-5 text-[13px] italic'
+            style={{ color: "#6B5A46", fontFamily: FONT }}>
+            {viewMode === "week" ? "Week" : "Month"} view is coming soon \u2014
+            showing Day view below.
+          </div>
+        )}
+
+        {/* Main grid: AM column, PM column, right panel */}
+        <div
+          className='grid gap-6'
+          style={{ gridTemplateColumns: "1fr 24px 1fr 1.2fr" }}>
+          <Panel style={{ minHeight: "780px" }}>
+            <ScheduleColumn
+              label='12 AM \u2013 12 PM'
+              windowStart={0}
+              windowEnd={720}
+              blocks={blocks}
+            />
+          </Panel>
+
+          <BinderDots />
+
+          <Panel style={{ minHeight: "780px" }}>
+            <ScheduleColumn
+              label='12 PM \u2013 12 AM'
+              windowStart={720}
+              windowEnd={1440}
+              blocks={blocks}
+            />
+          </Panel>
+
+          <div className='flex flex-col gap-6'>
             <Panel>
               <h2
-                className='mb-3'
-                style={{
-                  fontFamily: "'Caveat', cursive",
-                  fontSize: "20px",
-                  color: "#2E3A50",
-                }}>
-                Key Insights
+                className='text-[19px] font-bold mb-4'
+                style={{ color: "#3B2C20", fontFamily: FONT }}>
+                24-Hour Overview
+              </h2>
+              <OverviewBar blocks={blocks} />
+            </Panel>
+
+            <Panel>
+              <h2
+                className='text-[19px] font-bold mb-4'
+                style={{ color: "#3B2C20", fontFamily: FONT }}>
+                Time Allocation
               </h2>
               <div className='flex flex-col gap-3'>
-                {work && (
-                  <InsightRow
-                    icon={BarChart3}
-                    heading='Largest time commitment'
-                    detail={`${
-                      CATEGORY_META[work.category].label
-                    } (${hoursLabel(work.totalMinutes)}, ${Math.round(
-                      work.percentageOfDay
-                    )}%)`}
-                  />
-                )}
-                {workFirstStart && workLastEnd && (
-                  <InsightRow
-                    icon={Clock}
-                    heading='Free from work'
-                    detail={`${fmtTime(workLastEnd.endTime)} \u2013 ${fmtTime(
-                      workFirstStart.startTime
-                    )} (${hoursLabel(freeFromWorkMinutes)})`}
-                  />
-                )}
-                {analysis.longestFreeWindow && (
-                  <InsightRow
-                    icon={Star}
-                    heading='Longest free block'
-                    detail={`${hoursLabel(
-                      analysis.longestFreeWindow.durationMinutes
-                    )} (${fmtTime(
-                      analysis.longestFreeWindow.startTime
-                    )} \u2013 ${fmtTime(analysis.longestFreeWindow.endTime)})`}
-                  />
-                )}
-                {sleepBlocks.length > 0 && (
-                  <InsightRow
-                    icon={Moon}
-                    heading='Sleep schedule'
-                    detail={`${fmtTime(
-                      sleepBlocks[0].startTime
-                    )} \u2013 ${fmtTime(sleepBlocks[0].endTime)} (${hoursLabel(
-                      totalMinutesForCategory("sleep")
-                    )})`}
-                  />
-                )}
+                {groups.map((g) => (
+                  <AllocationRow key={g.group} summary={g} />
+                ))}
               </div>
             </Panel>
 
-            <Panel style={{ position: "relative" }}>
-              <div
-                className='absolute -top-2 right-6 w-12 h-5 rotate-[6deg]'
-                style={{ backgroundColor: "#9FC3DEaa" }}
-              />
+            <Panel>
               <h2
-                className='mb-3'
-                style={{
-                  fontFamily: "'Caveat', cursive",
-                  fontSize: "20px",
-                  color: "#2E3A50",
-                }}>
-                Notes
+                className='text-[19px] font-bold mb-4'
+                style={{ color: "#3B2C20", fontFamily: FONT }}>
+                Key Insights
               </h2>
-              <ul className='flex flex-col gap-2 mb-3'>
-                {[
-                  "Stay consistent",
-                  "Make time for what I enjoy",
-                  "Small progress adds up!",
-                ].map((n) => (
-                  <li key={n} className='flex items-center gap-2'>
-                    <span
-                      className='w-3.5 h-3.5 rounded-sm border shrink-0'
-                      style={{ borderColor: "#2E3A50" }}
-                    />
-                    <span
-                      className='text-[12.5px]'
-                      style={{ color: "#2E3A50" }}>
-                      {n}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <p
-                style={{
-                  fontFamily: "'Caveat', cursive",
-                  fontSize: "16px",
-                  color: "#2E3A50",
-                  lineHeight: 1.3,
-                }}>
-                A well-planned day leads to a calmer mind.
-              </p>
+              <div className='flex gap-3'>
+                {mostTime && (
+                  <InsightCard
+                    icon={Clock}
+                    label='Most Time'
+                    value={GROUP_META[mostTime.group].label.split(" ")[0]}
+                    caption={`${hoursLabel(mostTime.totalMinutes)} (${Math.round(mostTime.percentageOfDay)}%)`}
+                  />
+                )}
+                {analysis.longestFreeWindow && (
+                  <InsightCard
+                    icon={Sun}
+                    label='Largest Free Block'
+                    value={hoursLabel(
+                      analysis.longestFreeWindow.durationMinutes,
+                    )}
+                    caption={`${fmtTime(analysis.longestFreeWindow.startTime)} \u2013 ${fmtTime(analysis.longestFreeWindow.endTime)}`}
+                  />
+                )}
+                <InsightCard
+                  icon={CalendarDays}
+                  label='Overall Free Time'
+                  value={`~${hoursLabel(freeMinutes)}`}
+                  caption={`(${Math.round((freeMinutes / 1440) * 100)}% of day)`}
+                />
+              </div>
             </Panel>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
