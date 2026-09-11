@@ -1,6 +1,6 @@
 import { Dayjs } from "dayjs";
 
-export type ActivityCategory =
+export type activityCategory =
   | "sleep"
   | "work"
   | "commute"
@@ -12,45 +12,43 @@ export type ActivityCategory =
   | "free"
   | "other";
 
-export type Availability = "busy" | "flexible" | "free";
+export type availability = "busy" | "flexible" | "free";
 
-export type TimeOfDay = {
+export type timeOfDay = {
   hour: number;
   minute: number;
 };
 
-export type ScheduleBlock = {
+export type scheduleBlock = {
   id: string;
   title: string;
   description?: string;
-  category: ActivityCategory;
-  availability: Availability;
-  startTime: TimeOfDay;
-  endTime: TimeOfDay;
+  category: activityCategory;
+  availability: availability;
+  timeWindow: timeWindow;
 };
 
-export type DailySchedule = {
+export type dailySchedule = {
   date: Dayjs;
-  blocks: ScheduleBlock[];
+  blocks: scheduleBlock[];
 };
 
-export type CategorySummary = {
-  category: ActivityCategory;
+export type categorySummary = {
+  category: activityCategory;
   totalMinutes: number;
   percentageOfDay: number;
 };
 
-export type TimeWindow = {
-  startTime: TimeOfDay;
-  endTime: TimeOfDay;
-  durationMinutes: number;
+export type timeWindow = {
+  startTime: timeOfDay;
+  endTime: timeOfDay;
 };
 
-export type ScheduleAnalysis = {
-  categoryBreakdown: CategorySummary[];
-  freeWindows: TimeWindow[];
-  longestFreeWindow?: TimeWindow;
-  largestCategory?: CategorySummary;
+export type scheduleAnalysis = {
+  categoryBreakdown: categorySummary[];
+  freeWindows: timeWindow[];
+  longestFreeWindow?: timeWindow;
+  largestCategory?: categorySummary;
   totalBusyMinutes: number;
   totalFlexibleMinutes: number;
   totalFreeMinutes: number;
