@@ -1,279 +1,66 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import dayjs from "dayjs";
-import { v4 as uuidv4 } from "uuid";
 import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
   CalendarDays,
   User,
+  Sun,
+  Clock,
 } from "lucide-react";
 import { mockDailySchedule } from "./mockData";
 import ScheduleColumn from "./components/ScheduleColumn";
-import { FONT } from "./styles";
-
-/* -------------------------------------------------------------------------
- * Types (documented in JS via shape, matching the provided TS definitions)
- *
- * ActivityCategory: "sleep" | "work" | "commute" | "meal" | "exercise"
- *   | "study" | "hobby" | "personal" | "free" | "other"
- * Availability: "busy" | "flexible" | "free"
- * TimeOfDay: { hour, minute } -- to-the-minute precision.
- * ScheduleBlock: { id, title, description?, category, availability,
- *   startTime, endTime }
- * DailySchedule: { date: Dayjs, blocks: ScheduleBlock[] }
- * CategorySummary: { category, totalMinutes, percentageOfDay }
- * TimeWindow: { startTime, endTime, durationMinutes }
- * ScheduleAnalysis: { categoryBreakdown, freeWindows, longestFreeWindow?,
- *   largestCategory?, totalBusyMinutes, totalFlexibleMinutes, totalFreeMinutes }
- * ---------------------------------------------------------------------- */
-
-/* --------------------------- sample data builder --------------------------- */
-
-function block(title, category, availability, startTime, endTime) {
-  return { id: uuidv4(), title, category, availability, startTime, endTime };
-}
-function t(hour, minute = 0) {
-  return { hour, minute };
-}
-
-/* ------------------------------- analysis --------------------------------- */
-
-function analyzeSchedule(blocks) {
-  const totalsByCategory = {};
-  for (const b of blocks) {
-    totalsByCategory[b.category] =
-      (totalsByCategory[b.category] || 0) + durationOf(b);
-  }
-  const categoryBreakdown = Object.entries(totalsByCategory)
-    .map(([category, totalMinutes]) => ({
-      category,
-      totalMinutes,
-      percentageOfDay: (totalMinutes / 1440) * 100,
-    }))
-    .sort((a, b) => b.totalMinutes - a.totalMinutes);
-
-  const largestCategory = categoryBreakdown[0];
-
-  let totalBusyMinutes = 0;
-  let totalFlexibleMinutes = 0;
-  let totalFreeMinutes = 0;
-  for (const b of blocks) {
-    const mins = durationOf(b);
-    if (b.availability === "busy") totalBusyMinutes += mins;
-    else if (b.availability === "flexible") totalFlexibleMinutes += mins;
-    else totalFreeMinutes += mins;
-  }
-
-  const timeline = new Array(1440).fill(true); // true = not free
-  for (const b of blocks) {
-    const start = toMinutes(b.startTime);
-    const dur = durationOf(b);
-    for (let i = 0; i < dur; i++)
-      timeline[(start + i) % 1440] = b.availability !== "free";
-  }
-  const freeWindows = [];
-  let runStart = null;
-  for (let m = 0; m <= 1440; m++) {
-    const isFree = m < 1440 && !timeline[m];
-    if (isFree && runStart === null) runStart = m;
-    if (!isFree && runStart !== null) {
-      freeWindows.push({
-        startTime: fromMinutes(runStart),
-        endTime: fromMinutes(m),
-        durationMinutes: m - runStart,
-      });
-      runStart = null;
-    }
-  }
-  const longestFreeWindow = freeWindows.reduce(
-    (best, w) => (!best || w.durationMinutes > best.durationMinutes ? w : best),
-    undefined,
-  );
-
-  return {
-    categoryBreakdown,
-    freeWindows,
-    longestFreeWindow,
-    largestCategory,
-    totalBusyMinutes,
-    totalFlexibleMinutes,
-    totalFreeMinutes,
-  };
-}
-
-// Roll the fine-grained categoryBreakdown up into the 7 display groups used
-// by the legend / allocation panel / "most time" insight.
-function groupBreakdown(categoryBreakdown) {
-  const totals = {};
-  for (const c of categoryBreakdown) {
-    const g = CATEGORY_META[c.category].group;
-    totals[g] = (totals[g] || 0) + c.totalMinutes;
-  }
-  return GROUP_ORDER.filter((g) => totals[g] > 0)
-    .map((g) => ({
-      group: g,
-      totalMinutes: totals[g],
-      percentageOfDay: (totals[g] / 1440) * 100,
-    }))
-    .sort((a, b) => b.totalMinutes - a.totalMinutes);
-}
-
-function Panel({ children, style, className = "" }) {
-  return (
-    <section
-      className={`rounded-xl border p-5 ${className}`}
-      style={{
-        backgroundColor: "#FBF6EB",
-        borderColor: "rgba(90,66,46,0.18)",
-        ...style,
-      }}>
-      {children}
-    </section>
-  );
-}
-
-function BinderDots({ count = 15 }) {
-  return (
-    <div className='hidden md:flex flex-col items-center justify-between h-full py-2'>
-      {Array.from({ length: count }).map((_, i) => (
-        <span
-          key={i}
-          className='w-2.5 h-2.5 rounded-full'
-          style={{ backgroundColor: "rgba(90,66,46,0.35)" }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function OverviewBar({ blocks }) {
-  return (
-    <div>
-      <div
-        className='flex w-full h-8 rounded-md overflow-hidden border'
-        style={{ borderColor: "rgba(90,66,46,0.2)" }}>
-        {blocks.map((b) => (
-          <div
-            key={b.id}
-            style={{
-              flexGrow: durationOf(b),
-              flexBasis: 0,
-              backgroundColor: CATEGORY_META[b.category].color,
-              borderRight: "1px solid rgba(255,255,255,0.4)",
-            }}
-          />
-        ))}
-      </div>
-      <div
-        className='flex mt-1.5 text-[10.5px]'
-        style={{ color: "#8C7A63", fontFamily: FONT }}>
-        {["12 AM", "6 AM", "12 PM", "6 PM", "12 AM"].map((lbl, i) => (
-          <div
-            key={i}
-            className='flex-1 text-center first:text-left last:text-right'>
-            {lbl}
-          </div>
-        ))}
-      </div>
-      <div className='flex flex-wrap gap-x-5 gap-y-2 mt-4'>
-        {GROUP_ORDER.map((g) => (
-          <div key={g} className='flex items-center gap-1.5'>
-            <span
-              className='w-2.5 h-2.5 rounded-full shrink-0'
-              style={{ backgroundColor: GROUP_META[g].color }}
-            />
-            <span
-              className='text-[12px]'
-              style={{ color: "#3B2C20", fontFamily: FONT }}>
-              {GROUP_META[g].label}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function AllocationRow({ summary }) {
-  const meta = GROUP_META[summary.group];
-  return (
-    <div className='flex items-center gap-3'>
-      <span
-        className='w-[168px] shrink-0 text-[13px] truncate'
-        style={{ color: "#3B2C20", fontFamily: FONT }}>
-        {meta.label}
-      </span>
-      <div
-        className='flex-1 h-3 rounded-full overflow-hidden'
-        style={{ backgroundColor: "#E7DCC6" }}>
-        <div
-          className='h-full rounded-full'
-          style={{
-            width: `${summary.percentageOfDay}%`,
-            backgroundColor: meta.color,
-          }}
-        />
-      </div>
-      <span
-        className='w-8 text-right text-[12.5px] tabular-nums'
-        style={{ color: "#6B5A46", fontFamily: FONT }}>
-        {hoursLabel(summary.totalMinutes)}
-      </span>
-      <span
-        className='w-10 text-right text-[12.5px] tabular-nums'
-        style={{ color: "#6B5A46", fontFamily: FONT }}>
-        {Math.round(summary.percentageOfDay)}%
-      </span>
-    </div>
-  );
-}
-
-function InsightCard({ icon: Icon, label, value, caption }) {
-  return (
-    <div
-      className='flex-1 rounded-lg border p-3.5'
-      style={{
-        borderColor: "rgba(90,66,46,0.18)",
-        backgroundColor: "#F3ECDC",
-      }}>
-      <div className='flex items-center gap-1.5 mb-2'>
-        <Icon size={14} color='#6B5A46' />
-        <span
-          className='text-[11px]'
-          style={{ color: "#6B5A46", fontFamily: FONT }}>
-          {label}
-        </span>
-      </div>
-      <div
-        className='text-[16px] font-bold mb-0.5 truncate'
-        style={{ color: "#3B2C20", fontFamily: FONT }}>
-        {value}
-      </div>
-      <div
-        className='text-[11px]'
-        style={{ color: "#6B5A46", fontFamily: FONT }}>
-        {caption}
-      </div>
-    </div>
-  );
-}
+import ScheduleBlockModal from "./components/ScheduleBlockModal";
+import Panel from "./components/Panel";
+import OverviewBar from "./components/OverviewBar";
+import AllocationRow from "./components/AllocationRow";
+import InsightCard from "./components/InsightCard";
+import type { scheduleBlock } from "./types/schedule";
+import { FONT, GROUP_META } from "./styles";
+import { fmtTime, hoursLabel } from "./utility/time";
+import { analyzeSchedule, groupBreakdown } from "./utility/scheduleAnalysis";
 
 /* --------------------------------- main app --------------------------------- */
 
 export default function DailySchedulePlanner() {
   const [date, setDate] = useState(dayjs("2024-04-23"));
   const [viewMode, setViewMode] = useState("day");
-  const blocks = mockDailySchedule.blocks;
+  const [blocks, setBlocks] = useState<scheduleBlock[]>(
+    mockDailySchedule.blocks,
+  );
+  const [modalState, setModalState] = useState<{
+    mode: "create" | "edit";
+    block?: scheduleBlock;
+  } | null>(null);
 
-  // const analysis = useMemo(() => analyzeSchedule(blocks), [blocks]);
-  // const groups = useMemo(
-  //   () => groupBreakdown(analysis.categoryBreakdown),
-  //   [analysis],
-  // );
+  const openCreateModal = () => setModalState({ mode: "create" });
+  const openEditModal = (id: string) => {
+    const block = blocks.find((b) => b.id === id);
+    if (block) setModalState({ mode: "edit", block });
+  };
+  const closeModal = () => setModalState(null);
+  const handleSaveBlock = (block: scheduleBlock) => {
+    setBlocks((prev) =>
+      modalState?.mode === "edit"
+        ? prev.map((b) => (b.id === block.id ? block : b))
+        : [...prev, block],
+    );
+    closeModal();
+  };
+  const handleDeleteBlock = (id: string) => {
+    setBlocks((prev) => prev.filter((b) => b.id !== id));
+    closeModal();
+  };
 
-  // const mostTime = groups[0];
-  // const freeMinutes = analysis.totalFlexibleMinutes + analysis.totalFreeMinutes;
+  const analysis = useMemo(() => analyzeSchedule(blocks), [blocks]);
+  const groups = useMemo(
+    () => groupBreakdown(analysis.categoryBreakdown),
+    [analysis],
+  );
+
+  const mostTime = groups[0];
+  const freeMinutes = analysis.totalFlexibleMinutes + analysis.totalFreeMinutes;
 
   return (
     <div
@@ -359,6 +146,16 @@ export default function DailySchedulePlanner() {
           </div>
 
           <div className='flex items-center gap-4'>
+            <button
+              onClick={openCreateModal}
+              className='px-4 py-2 rounded-lg text-[13px] font-bold'
+              style={{
+                backgroundColor: "#A9C7E8",
+                color: "#3B2C20",
+                fontFamily: FONT,
+              }}>
+              + Create Time Block
+            </button>
             <div
               className='flex rounded-lg border overflow-hidden'
               style={{ borderColor: "rgba(90,66,46,0.2)" }}>
@@ -418,6 +215,7 @@ export default function DailySchedulePlanner() {
               windowStart={0}
               windowEnd={720}
               blocks={blocks}
+              onBlockClick={openEditModal}
             />
           </Panel>
 
@@ -427,10 +225,11 @@ export default function DailySchedulePlanner() {
               windowStart={720}
               windowEnd={1440}
               blocks={blocks}
+              onBlockClick={openEditModal}
             />
           </Panel>
 
-          {/* <div className='flex flex-col gap-6'>
+          <div className='flex flex-col gap-6'>
             <Panel>
               <h2
                 className='text-[19px] font-bold mb-4'
@@ -485,10 +284,20 @@ export default function DailySchedulePlanner() {
                   caption={`(${Math.round((freeMinutes / 1440) * 100)}% of day)`}
                 />
               </div>
-            </Panel> 
-          </div> */}
+            </Panel>
+          </div>
         </div>
       </div>
+
+      <ScheduleBlockModal
+        isOpen={modalState !== null}
+        mode={modalState?.mode ?? "create"}
+        initialBlock={modalState?.block}
+        existingBlocks={blocks}
+        onSave={handleSaveBlock}
+        onDelete={handleDeleteBlock}
+        onClose={closeModal}
+      />
     </div>
   );
 }

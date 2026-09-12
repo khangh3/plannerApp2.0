@@ -53,16 +53,6 @@ const scheduleBlock: scheduleBlock[] = [
       endTime: { hour: 19, minute: 15 },
     },
   },
-  {
-    id: uuidv4(),
-    title: "Free Time",
-    category: "free",
-    availability: "free",
-    timeWindow: {
-      startTime: { hour: 19, minute: 15 },
-      endTime: { hour: 23, minute: 0 },
-    },
-  },
 ];
 
 export const mockDailySchedule: dailySchedule = {

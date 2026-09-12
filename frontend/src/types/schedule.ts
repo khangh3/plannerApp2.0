@@ -9,10 +9,9 @@ export type activityCategory =
   | "study"
   | "hobby"
   | "personal"
-  | "free"
   | "other";
 
-export type availability = "busy" | "flexible" | "free";
+export type availability = "busy" | "flexible";
 
 export type timeOfDay = {
   hour: number;

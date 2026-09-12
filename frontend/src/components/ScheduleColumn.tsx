@@ -4,7 +4,13 @@ import { CATEGORY_META } from "../styles";
 import type { scheduleBlock, timeOfDay } from "../types/schedule";
 import { toMinutes, fromMinutes, fmtTime, durationOf } from "../utility/time";
 
-function TimeBlock({ position }: { position: position }) {
+function TimeBlock({
+  position,
+  onClick,
+}: {
+  position: position;
+  onClick: () => void;
+}) {
   const { block, topPct, heightPct, labelStart, labelEnd } = position;
   const meta = CATEGORY_META[block.category];
   const compact = heightPct < 3.2;
@@ -21,7 +27,8 @@ function TimeBlock({ position }: { position: position }) {
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
-      }}>
+      }}
+      onClick={onClick}>
       <div
         className='italic truncate'
         style={{
@@ -59,11 +66,13 @@ function ScheduleColumn({
   windowStart,
   windowEnd,
   blocks,
+  onBlockClick,
 }: {
   label: string;
   windowStart: number;
   windowEnd: number;
   blocks: scheduleBlock[];
+  onBlockClick: (id: string) => void;
 }) {
   const span = windowEnd - windowStart;
   const hourMarks = [];
@@ -102,7 +111,7 @@ function ScheduleColumn({
               className='absolute left-0 right-0 flex items-start'
               style={{ top: `${pct}%` }}>
               <span
-                className='w-[52px] shrink-0 -translate-y-1/2 text-[11px] text-right pr-2'
+                className='w-13 shrink-0 -translate-y-1/2 text-[11px] text-right pr-2'
                 style={{ color: "#8C7A63", fontFamily: FONT }}>
                 {dayjs()
                   .hour(Math.floor(m / 60) % 24)
@@ -120,7 +129,11 @@ function ScheduleColumn({
           className='absolute inset-0'
           style={{ left: "52px", paddingLeft: "10px" }}>
           {positioned.map((position) => (
-            <TimeBlock key={position.block.id} position={position} />
+            <TimeBlock
+              key={position.block.id}
+              position={position}
+              onClick={() => onBlockClick(position.block.id)}
+            />
           ))}
         </div>
       </div>

@@ -27,3 +27,11 @@ export const hoursLabel = (mins: number) => {
   if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;
 };
+
+export const timeOfDayToInputString = (tod: timeOfDay) =>
+  `${String(tod.hour).padStart(2, "0")}:${String(tod.minute).padStart(2, "0")}`;
+
+export const inputStringToTimeOfDay = (value: string): timeOfDay => {
+  const [hour, minute] = value.split(":").map(Number);
+  return { hour, minute };
+};
