@@ -20,7 +20,12 @@ import { FONT, GROUP_META } from "./styles";
 import { fmtTime, hoursLabel } from "./utility/time";
 import { analyzeSchedule, groupBreakdown } from "./utility/scheduleAnalysis";
 import { supabase } from "./supabaseClient";
-import { addBlock, convertToScheduleBlock, updateBlock } from "./utility/api";
+import {
+  addBlock,
+  convertToScheduleBlock,
+  deleteBlock,
+  updateBlock,
+} from "./utility/api";
 
 /* --------------------------------- main app --------------------------------- */
 
@@ -40,13 +45,17 @@ export default function DailySchedulePlanner() {
   };
   const closeModal = () => setModalState(null);
   const handleSaveBlock = async (block: scheduleBlock) => {
-    modalState?.mode === "edit" ? updateBlock(block) : addBlock(block);
-
+    if (modalState?.mode === "edit") {
+      await updateBlock(block);
+    } else {
+      await addBlock(block);
+    }
     await getBlocks();
     closeModal();
   };
-  const handleDeleteBlock = (id: string) => {
-    setBlocks((prev) => prev.filter((b) => b.id !== id));
+  const handleDeleteBlock = async (id: string) => {
+    await deleteBlock(id);
+    await getBlocks();
     closeModal();
   };
 

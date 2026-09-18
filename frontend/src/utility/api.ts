@@ -16,9 +16,7 @@ export const addBlock = async (block: scheduleBlock) => {
   const dataBlock = convertToDataBlock(block);
   const { error } = await supabase.from("time_block").insert(dataBlock);
 
-  if (error) console.log(error);
-
-  return;
+  if (error) throw error;
 };
 
 export const updateBlock = async (block: scheduleBlock) => {
@@ -28,8 +26,13 @@ export const updateBlock = async (block: scheduleBlock) => {
     .update(dataBlock)
     .eq("id", dataBlock.id);
 
-  if (error) console.log(error);
-  return;
+  if (error) throw error;
+};
+
+export const deleteBlock = async (id: string) => {
+  const { error } = await supabase.from("time_block").delete().eq("id", id);
+
+  if (error) throw error;
 };
 
 export const convertToScheduleBlock = (block: dataBlock): scheduleBlock => {

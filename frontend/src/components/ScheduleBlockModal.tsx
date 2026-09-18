@@ -29,8 +29,8 @@ type ScheduleBlockModalProps = {
   isOpen: boolean;
   initialBlock?: scheduleBlock;
   existingBlocks: scheduleBlock[];
-  onSave: (block: scheduleBlock) => void;
-  onDelete?: (id: string) => void;
+  onSave: (block: scheduleBlock) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
   onClose: () => void;
 };
 
@@ -51,6 +51,7 @@ function ScheduleBlockModal({
   const [startTimeStr, setStartTimeStr] = useState(DEFAULT_START);
   const [endTimeStr, setEndTimeStr] = useState(DEFAULT_END);
   const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -70,11 +71,12 @@ function ScheduleBlockModal({
       setEndTimeStr(DEFAULT_END);
     }
     setError(null);
+    setIsSaving(false);
   }, [isOpen, initialBlock]);
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
       setError("Title is required");
@@ -116,7 +118,26 @@ function ScheduleBlockModal({
         ? { ...initialBlock, ...blockData }
         : createScheduleBlock(blockData);
 
-    onSave(block);
+    setError(null);
+    setIsSaving(true);
+    try {
+      await onSave(block);
+    } catch {
+      setError("Failed to save time block. Please try again.");
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!onDelete || !initialBlock) return;
+    setError(null);
+    setIsSaving(true);
+    try {
+      await onDelete(initialBlock.id);
+    } catch {
+      setError("Failed to delete time block. Please try again.");
+      setIsSaving(false);
+    }
   };
 
   const inputStyle = {
@@ -248,8 +269,9 @@ function ScheduleBlockModal({
           <div>
             {mode === "edit" && onDelete && initialBlock && (
               <button
-                onClick={() => onDelete(initialBlock.id)}
-                className='px-3.5 py-2 rounded-lg text-[13px] font-bold'
+                onClick={handleDelete}
+                disabled={isSaving}
+                className='px-3.5 py-2 rounded-lg text-[13px] font-bold disabled:opacity-50'
                 style={{
                   backgroundColor: "#E8C6C0",
                   color: "#6B2E24",
@@ -262,7 +284,8 @@ function ScheduleBlockModal({
           <div className='flex gap-2'>
             <button
               onClick={onClose}
-              className='px-3.5 py-2 rounded-lg text-[13px] font-bold'
+              disabled={isSaving}
+              className='px-3.5 py-2 rounded-lg text-[13px] font-bold disabled:opacity-50'
               style={{
                 backgroundColor: "#F1E8D6",
                 color: "#3B2C20",
@@ -272,13 +295,14 @@ function ScheduleBlockModal({
             </button>
             <button
               onClick={handleSave}
-              className='px-3.5 py-2 rounded-lg text-[13px] font-bold'
+              disabled={isSaving}
+              className='px-3.5 py-2 rounded-lg text-[13px] font-bold disabled:opacity-50'
               style={{
                 backgroundColor: "#A9C7E8",
                 color: "#3B2C20",
                 fontFamily: FONT,
               }}>
-              Save
+              {isSaving ? "Saving…" : "Save"}
             </button>
           </div>
         </div>
