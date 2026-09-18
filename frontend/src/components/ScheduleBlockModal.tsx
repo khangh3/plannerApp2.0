@@ -83,6 +83,7 @@ function ScheduleBlockModal({
       return;
     }
 
+    // constraints
     const startTime = inputStringToTimeOfDay(startTimeStr);
     const endTime = inputStringToTimeOfDay(endTimeStr);
 
