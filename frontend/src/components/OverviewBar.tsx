@@ -12,7 +12,7 @@ function OverviewBar({ blocks }: { blocks: scheduleBlock[] }) {
           <div
             key={b.id}
             style={{
-              flexGrow: durationOf(b.timeWindow),
+              flexGrow: durationOf(b.startTime, b.endTime),
               flexBasis: 0,
               backgroundColor: CATEGORY_META[b.category].color,
               borderRight: "1px solid rgba(255,255,255,0.4)",

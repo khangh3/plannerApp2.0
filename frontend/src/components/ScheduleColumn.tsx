@@ -80,8 +80,8 @@ function ScheduleColumn({
 
   const positioned: position[] = blocks
     .map((b) => {
-      const realStart = toMinutes(b.timeWindow.startTime);
-      const realEnd = realStart + durationOf(b.timeWindow);
+      const realStart = toMinutes(b.startTime);
+      const realEnd = realStart + durationOf(b.startTime, b.endTime);
       const clipStart = Math.max(realStart, windowStart);
       const clipEnd = Math.min(realEnd, windowEnd);
       if (clipEnd <= clipStart) return null;

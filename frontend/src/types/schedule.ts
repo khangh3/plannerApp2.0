@@ -13,6 +13,11 @@ export type activityCategory =
 
 export type availability = "busy" | "flexible";
 
+export type timeWindow = {
+  startTime: timeOfDay;
+  endTime: timeOfDay;
+};
+
 export type timeOfDay = {
   hour: number;
   minute: number;
@@ -24,7 +29,8 @@ export type scheduleBlock = {
   description?: string;
   category: activityCategory;
   availability: availability;
-  timeWindow: timeWindow;
+  startTime: timeOfDay;
+  endTime: timeOfDay;
 };
 
 export type dailySchedule = {
@@ -36,11 +42,6 @@ export type categorySummary = {
   category: activityCategory;
   totalMinutes: number;
   percentageOfDay: number;
-};
-
-export type timeWindow = {
-  startTime: timeOfDay;
-  endTime: timeOfDay;
 };
 
 export type scheduleAnalysis = {

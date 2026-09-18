@@ -1,22 +1,32 @@
 import { v4 as uuidv4 } from "uuid";
-import type { scheduleBlock, timeWindow } from "../types/schedule";
+import type { scheduleBlock, timeOfDay } from "../types/schedule";
 import { toMinutes } from "./time";
 
-export const blocksOverlap = (a: timeWindow, b: timeWindow): boolean =>
-  toMinutes(a.startTime) < toMinutes(b.endTime) &&
-  toMinutes(b.startTime) < toMinutes(a.endTime);
+export const blocksOverlap = (
+  a: scheduleBlock,
+  startTime: timeOfDay,
+  endTime: timeOfDay,
+): boolean =>
+  toMinutes(a.startTime) < toMinutes(endTime) &&
+  toMinutes(startTime) < toMinutes(a.endTime);
 
 export const findOverlappingBlock = (
-  candidate: timeWindow,
+  startTime: timeOfDay,
+  endTime: timeOfDay,
   blocks: scheduleBlock[],
   excludeId?: string,
 ): scheduleBlock | undefined =>
   blocks.find(
-    (b) => b.id !== excludeId && blocksOverlap(candidate, b.timeWindow),
+    (b) => b.id !== excludeId && blocksOverlap(b, startTime, endTime),
   );
 
-export const isValidTimeWindow = (tw: timeWindow): boolean =>
-  toMinutes(tw.endTime) > toMinutes(tw.startTime);
+export const isValidTimeWindow = (
+  startTime: timeOfDay,
+  endTime: timeOfDay,
+): boolean => {
+  if (endTime.hour === 0 && endTime.minute === 0) return true;
+  return toMinutes(endTime) > toMinutes(startTime);
+};
 
 export const createScheduleBlock = (
   input: Omit<scheduleBlock, "id">,

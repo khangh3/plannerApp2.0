@@ -1,6 +1,10 @@
 import { CATEGORY_META, GROUP_ORDER } from "../styles";
 import type { activityGroup } from "../styles";
-import type { activityCategory, scheduleBlock, timeOfDay } from "../types/schedule";
+import type {
+  activityCategory,
+  scheduleBlock,
+  timeOfDay,
+} from "../types/schedule";
 import { toMinutes, fromMinutes, durationOf } from "./time";
 
 export type groupSummary = {
@@ -25,7 +29,7 @@ export function analyzeSchedule(blocks: scheduleBlock[]) {
   const totalsByCategory: Partial<Record<activityCategory, number>> = {};
   for (const b of blocks) {
     totalsByCategory[b.category] =
-      (totalsByCategory[b.category] || 0) + durationOf(b.timeWindow);
+      (totalsByCategory[b.category] || 0) + durationOf(b.startTime, b.endTime);
   }
   const categoryBreakdown: categoryTotal[] = (
     Object.entries(totalsByCategory) as [activityCategory, number][]
@@ -42,7 +46,7 @@ export function analyzeSchedule(blocks: scheduleBlock[]) {
   let totalBusyMinutes = 0;
   let totalFlexibleMinutes = 0;
   for (const b of blocks) {
-    const mins = durationOf(b.timeWindow);
+    const mins = durationOf(b.startTime, b.endTime);
     if (b.availability === "busy") totalBusyMinutes += mins;
     else totalFlexibleMinutes += mins;
   }
@@ -50,8 +54,8 @@ export function analyzeSchedule(blocks: scheduleBlock[]) {
   // Free time isn't tagged on a block — it's whatever time no block covers.
   const timeline = new Array(1440).fill(false); // false = free (uncovered)
   for (const b of blocks) {
-    const start = toMinutes(b.timeWindow.startTime);
-    const dur = durationOf(b.timeWindow);
+    const start = toMinutes(b.startTime);
+    const dur = durationOf(b.startTime, b.endTime);
     for (let i = 0; i < dur; i++) timeline[(start + i) % 1440] = true;
   }
   const freeWindows: freeWindow[] = [];
@@ -72,7 +76,10 @@ export function analyzeSchedule(blocks: scheduleBlock[]) {
     (best, w) => (!best || w.durationMinutes > best.durationMinutes ? w : best),
     undefined,
   );
-  const totalFreeMinutes = freeWindows.reduce((sum, w) => sum + w.durationMinutes, 0);
+  const totalFreeMinutes = freeWindows.reduce(
+    (sum, w) => sum + w.durationMinutes,
+    0,
+  );
 
   return {
     categoryBreakdown,
@@ -87,7 +94,9 @@ export function analyzeSchedule(blocks: scheduleBlock[]) {
 
 // Roll the fine-grained categoryBreakdown up into the 7 display groups used
 // by the legend / allocation panel / "most time" insight.
-export function groupBreakdown(categoryBreakdown: categoryTotal[]): groupSummary[] {
+export function groupBreakdown(
+  categoryBreakdown: categoryTotal[],
+): groupSummary[] {
   const totals: Partial<Record<activityGroup, number>> = {};
   for (const c of categoryBreakdown) {
     const g = CATEGORY_META[c.category].group;

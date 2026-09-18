@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import type { timeOfDay, timeWindow } from "../types/schedule";
+import type { timeOfDay } from "../types/schedule";
 
 /* ------------------------------ time helpers ------------------------------ */
 
@@ -17,8 +17,11 @@ export const fmtTime = (tod: timeOfDay) => {
     .format("h:mm A");
 };
 
-export const durationOf = (b: timeWindow) =>
-  toMinutes(b.endTime) - toMinutes(b.startTime);
+export const durationOf = (startTime: timeOfDay, endTime: timeOfDay) => {
+  if (endTime.hour < startTime.hour)
+    return toMinutes({ hour: 24, minute: 0 }) - toMinutes(startTime);
+  return toMinutes(endTime) - toMinutes(startTime);
+};
 
 export const hoursLabel = (mins: number) => {
   const h = Math.floor(mins / 60);

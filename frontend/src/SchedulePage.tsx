@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import {
   ChevronLeft,
@@ -9,7 +9,6 @@ import {
   Sun,
   Clock,
 } from "lucide-react";
-import { mockDailySchedule } from "./mockData";
 import ScheduleColumn from "./components/ScheduleColumn";
 import ScheduleBlockModal from "./components/ScheduleBlockModal";
 import Panel from "./components/Panel";
@@ -20,15 +19,15 @@ import type { scheduleBlock } from "./types/schedule";
 import { FONT, GROUP_META } from "./styles";
 import { fmtTime, hoursLabel } from "./utility/time";
 import { analyzeSchedule, groupBreakdown } from "./utility/scheduleAnalysis";
+import { supabase } from "./supabaseClient";
+import { addBlock, convertToScheduleBlock, updateBlock } from "./utility/api";
 
 /* --------------------------------- main app --------------------------------- */
 
 export default function DailySchedulePlanner() {
   const [date, setDate] = useState(dayjs("2024-04-23"));
   const [viewMode, setViewMode] = useState("day");
-  const [blocks, setBlocks] = useState<scheduleBlock[]>(
-    mockDailySchedule.blocks,
-  );
+  const [blocks, setBlocks] = useState<scheduleBlock[]>(Array());
   const [modalState, setModalState] = useState<{
     mode: "create" | "edit";
     block?: scheduleBlock;
@@ -40,12 +39,10 @@ export default function DailySchedulePlanner() {
     if (block) setModalState({ mode: "edit", block });
   };
   const closeModal = () => setModalState(null);
-  const handleSaveBlock = (block: scheduleBlock) => {
-    setBlocks((prev) =>
-      modalState?.mode === "edit"
-        ? prev.map((b) => (b.id === block.id ? block : b))
-        : [...prev, block],
-    );
+  const handleSaveBlock = async (block: scheduleBlock) => {
+    modalState?.mode === "edit" ? updateBlock(block) : addBlock(block);
+
+    await getBlocks();
     closeModal();
   };
   const handleDeleteBlock = (id: string) => {
@@ -61,6 +58,23 @@ export default function DailySchedulePlanner() {
 
   const mostTime = groups[0];
   const freeMinutes = analysis.totalFlexibleMinutes + analysis.totalFreeMinutes;
+
+  useEffect(() => {
+    getBlocks();
+  }, []);
+
+  const getBlocks = async () => {
+    const { data, error } = await supabase.from("time_block").select();
+    if (error) {
+      console.log(error);
+      return;
+    }
+
+    const newBlocks = data.map((block) => {
+      return convertToScheduleBlock(block);
+    });
+    setBlocks(newBlocks);
+  };
 
   return (
     <div

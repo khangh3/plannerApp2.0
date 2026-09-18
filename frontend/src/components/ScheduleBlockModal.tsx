@@ -59,8 +59,8 @@ function ScheduleBlockModal({
       setDescription(initialBlock.description ?? "");
       setCategory(initialBlock.category);
       setAvailabilityValue(initialBlock.availability);
-      setStartTimeStr(timeOfDayToInputString(initialBlock.timeWindow.startTime));
-      setEndTimeStr(timeOfDayToInputString(initialBlock.timeWindow.endTime));
+      setStartTimeStr(timeOfDayToInputString(initialBlock.startTime));
+      setEndTimeStr(timeOfDayToInputString(initialBlock.endTime));
     } else {
       setTitle("");
       setDescription("");
@@ -81,24 +81,23 @@ function ScheduleBlockModal({
       return;
     }
 
-    const timeWindow = {
-      startTime: inputStringToTimeOfDay(startTimeStr),
-      endTime: inputStringToTimeOfDay(endTimeStr),
-    };
+    const startTime = inputStringToTimeOfDay(startTimeStr);
+    const endTime = inputStringToTimeOfDay(endTimeStr);
 
-    if (!isValidTimeWindow(timeWindow)) {
+    if (!isValidTimeWindow(startTime, endTime)) {
       setError("End time must be after start time");
       return;
     }
 
     const conflict = findOverlappingBlock(
-      timeWindow,
+      startTime,
+      endTime,
       existingBlocks,
       mode === "edit" ? initialBlock?.id : undefined,
     );
     if (conflict) {
       setError(
-        `Conflicts with "${conflict.title}" (${fmtTime(conflict.timeWindow.startTime)} - ${fmtTime(conflict.timeWindow.endTime)})`,
+        `Conflicts with "${conflict.title}" (${fmtTime(conflict.startTime)} - ${fmtTime(conflict.endTime)})`,
       );
       return;
     }
@@ -108,7 +107,8 @@ function ScheduleBlockModal({
       description: description.trim() || undefined,
       category,
       availability: availabilityValue,
-      timeWindow,
+      startTime: startTime,
+      endTime: endTime,
     };
 
     const block =
@@ -146,7 +146,9 @@ function ScheduleBlockModal({
           {mode === "create" ? "Create Time Block" : "Edit Time Block"}
         </h2>
 
-        <label className='flex flex-col gap-1 text-[13px]' style={{ color: "#6B5A46" }}>
+        <label
+          className='flex flex-col gap-1 text-[13px]'
+          style={{ color: "#6B5A46" }}>
           Title
           <input
             type='text'
@@ -157,7 +159,9 @@ function ScheduleBlockModal({
           />
         </label>
 
-        <label className='flex flex-col gap-1 text-[13px]' style={{ color: "#6B5A46" }}>
+        <label
+          className='flex flex-col gap-1 text-[13px]'
+          style={{ color: "#6B5A46" }}>
           Description
           <textarea
             className='px-2.5 py-1.5 rounded-md border text-[14px] resize-none'
@@ -169,7 +173,9 @@ function ScheduleBlockModal({
         </label>
 
         <div className='flex gap-3'>
-          <label className='flex-1 flex flex-col gap-1 text-[13px]' style={{ color: "#6B5A46" }}>
+          <label
+            className='flex-1 flex flex-col gap-1 text-[13px]'
+            style={{ color: "#6B5A46" }}>
             Category
             <select
               className='px-2.5 py-1.5 rounded-md border text-[14px]'
@@ -184,13 +190,17 @@ function ScheduleBlockModal({
             </select>
           </label>
 
-          <label className='flex-1 flex flex-col gap-1 text-[13px]' style={{ color: "#6B5A46" }}>
+          <label
+            className='flex-1 flex flex-col gap-1 text-[13px]'
+            style={{ color: "#6B5A46" }}>
             Availability
             <select
               className='px-2.5 py-1.5 rounded-md border text-[14px]'
               style={inputStyle}
               value={availabilityValue}
-              onChange={(e) => setAvailabilityValue(e.target.value as availability)}>
+              onChange={(e) =>
+                setAvailabilityValue(e.target.value as availability)
+              }>
               {AVAILABILITIES.map((a) => (
                 <option key={a} value={a}>
                   {label(a)}
@@ -201,7 +211,9 @@ function ScheduleBlockModal({
         </div>
 
         <div className='flex gap-3'>
-          <label className='flex-1 flex flex-col gap-1 text-[13px]' style={{ color: "#6B5A46" }}>
+          <label
+            className='flex-1 flex flex-col gap-1 text-[13px]'
+            style={{ color: "#6B5A46" }}>
             Start time
             <input
               type='time'
@@ -212,7 +224,9 @@ function ScheduleBlockModal({
             />
           </label>
 
-          <label className='flex-1 flex flex-col gap-1 text-[13px]' style={{ color: "#6B5A46" }}>
+          <label
+            className='flex-1 flex flex-col gap-1 text-[13px]'
+            style={{ color: "#6B5A46" }}>
             End time
             <input
               type='time'
@@ -236,7 +250,11 @@ function ScheduleBlockModal({
               <button
                 onClick={() => onDelete(initialBlock.id)}
                 className='px-3.5 py-2 rounded-lg text-[13px] font-bold'
-                style={{ backgroundColor: "#E8C6C0", color: "#6B2E24", fontFamily: FONT }}>
+                style={{
+                  backgroundColor: "#E8C6C0",
+                  color: "#6B2E24",
+                  fontFamily: FONT,
+                }}>
                 Delete
               </button>
             )}
@@ -245,13 +263,21 @@ function ScheduleBlockModal({
             <button
               onClick={onClose}
               className='px-3.5 py-2 rounded-lg text-[13px] font-bold'
-              style={{ backgroundColor: "#F1E8D6", color: "#3B2C20", fontFamily: FONT }}>
+              style={{
+                backgroundColor: "#F1E8D6",
+                color: "#3B2C20",
+                fontFamily: FONT,
+              }}>
               Cancel
             </button>
             <button
               onClick={handleSave}
               className='px-3.5 py-2 rounded-lg text-[13px] font-bold'
-              style={{ backgroundColor: "#A9C7E8", color: "#3B2C20", fontFamily: FONT }}>
+              style={{
+                backgroundColor: "#A9C7E8",
+                color: "#3B2C20",
+                fontFamily: FONT,
+              }}>
               Save
             </button>
           </div>

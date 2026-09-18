@@ -7,7 +7,7 @@ function AllocationRow({ summary }: { summary: groupSummary }) {
   return (
     <div className='flex items-center gap-3'>
       <span
-        className='w-[168px] shrink-0 text-[13px] truncate'
+        className='w-42 shrink-0 text-[13px] truncate'
         style={{ color: "#3B2C20", fontFamily: FONT }}>
         {meta.label}
       </span>
